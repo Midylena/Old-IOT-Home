@@ -30,7 +30,6 @@ public class MainActivity extends AppCompatActivity {
                 Conexao conexao = new Conexao();
                 try {
                     Historico historico = conexao.execute().get();
-                    Log.i(TAG,historico.toString());
                     textView.setText(historico.toString());
                 } catch (ExecutionException e) {
                     throw new RuntimeException(e);
