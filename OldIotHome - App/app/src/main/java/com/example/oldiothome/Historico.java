@@ -35,4 +35,8 @@ public class Historico {
                 "\ncomodo = " + getComodo() +
                 "\nnumComodo = " + getNumComodo();
     }
+
+    public String toStringNumComodo() {
+        return  "numComodo = " + getNumComodo();
+    }
 }

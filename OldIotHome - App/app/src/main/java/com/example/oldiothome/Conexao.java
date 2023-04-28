@@ -12,7 +12,7 @@ import java.net.URL;
 import java.util.Scanner;
 
 public class Conexao extends AsyncTask<Void, Void, Historico> {
-    private static final String TAG = "MyActivity";
+    private static final String TAG = "Servidor";
     @Override
     protected Historico doInBackground(Void... voids) {
         StringBuilder resposta = new StringBuilder();
