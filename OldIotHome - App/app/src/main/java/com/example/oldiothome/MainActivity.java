@@ -21,6 +21,7 @@ public class MainActivity extends AppCompatActivity {
         Button buttonCozinha;
         Button buttonQuarto;
         Button buttonBanheiro;
+        TextView textViewTag;
 
         @Override
         protected void onCreate (Bundle savedInstanceState) {
@@ -31,6 +32,8 @@ public class MainActivity extends AppCompatActivity {
             buttonCozinha = findViewById(R.id.button_Cozinha);
             buttonQuarto = findViewById(R.id.button_Quarto);
             buttonBanheiro = findViewById(R.id.button_Banheiro);
+            buttonBanheiro = findViewById(R.id.button_Banheiro);
+            textViewTag = findViewById(R.id.textView_Tag);
 
             //handler.postDelayed(atualizar, 1000);
             atualizar.run();
@@ -41,10 +44,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                     Conexao conexao = new Conexao();
+
                     try {
                         Historico historico = conexao.execute().get();
                         Log.i(TAG, historico.toString());
+                        Log.i(TAG, historico.toStringTag());
                         Log.i(TAG, historico.toStringNumComodo());
+                        textViewTag.setText(historico.getTag());
                         if (historico.getNumComodo() == 1) {
                             buttonSala.setBackgroundTintList(getResources().getColorStateList(R.color.Verde));
                             buttonCozinha.setBackgroundTintList(getResources().getColorStateList(R.color.Azul));

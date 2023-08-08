@@ -1,0 +1,529 @@
+#include "bsp_task1.h"
+#include "include.h"
+
+
+unsigned char key_type=0;
+
+/*
+14443a 标签读取任务
+*/
+void Iso_14443a_Single(void )
+{
+
+	unsigned char crc_first=0,crc_second=0;  //crc校验位
+  uint8_t _43block=0;
+	uint16_t status_2=0;
+
+		if( STATE2!=0)
+		 {
+			  #ifdef dbg
+				printf("STATE2=   %02x\r\n",STATE2);
+				printf("进入 STATE2    \r\n");
+				#endif
+				if( STATUS_APPLY_14443a==0x00)
+				{	
+					#ifdef dbg
+					printf("进入 STATUS_APPLY_14443a    \r\n");
+					printf(" STATUS_APPLY_14443a =%02x   \r\n",STATUS_APPLY_14443a);
+					printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif
+					status_2 = phhalHw_FieldOn(&halReader);  //这个函数必须要，不要会导致不能读卡
+					for(int i=0;i<5;i++)
+					{
+							status = phhalHw_ApplyProtocolSettings(&halReader,PHHAL_HW_CARDTYPE_ISO14443A);  //将卡的类型设为PHHAL_HW_CARDTYPE_ISO14443A  时间类型设为ms  配置timer寄存器  shadow赋值 写入协议类型
+							#ifdef dbg
+							printf("STATUS_APPLY_14443a=   %02x\r\n",STATUS_APPLY_14443a);
+						  #endif
+						  if(status==0x00)
+							{							
+									STATUS_APPLY_15693=0x00;
+									STATUS_APPLY_14443a=0x01;
+									break;
+							  }		
+							  else 
+							  {
+									STATUS_APPLY_14443a=0x00;
+							  }
+					}
+					#ifdef dbg
+					printf("  phhalHw_ApplyProtocolSettings status=%02x					\r\n",status);
+					printf(" STATUS_APPLY_14443a =%02x   \r\n",STATUS_APPLY_14443a);
+					printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif	
+				}
+		}
+		
+		
+		
+		
+    //14443a 读UID命令	
+		switch(STATE2)
+			{				
+		  	case 0x01:
+			  {	
+					if(STATUS_APPLY_14443a==0x01)
+					{
+//						phpalI14443p3a_RequestA(&I14443p3a,data_pAtqa);
+						
+						  for(int i=0;i<3;i++)
+						  {
+							//激活卡
+							status = phpalI14443p3a_ActivateCard(&I14443p3a, 
+																										NULL, 
+																										0x00, 
+																										bUid, 
+																										&bLength, 
+																										&bSak, 
+																										&bMoreCardsAvailable);	
+						
+					  	if(status == PH_ERR_SUCCESS)
+						   	break;
+					    }
+							#ifdef dbg
+							printf("time isphpalI14443p3a_ActivateCard status=%02x \r\n",status);
+							#endif
+							if (status == PH_ERR_SUCCESS) 
+							{
+								status_2 = phpalI14443p3a_GetSerialNo(&I14443p3a, bUid,&bLength);
+								#ifdef dbg
+								printf("time phpalI14443p3a_GetSerialNo status_2=%02x \r\n",status_2);
+								#endif
+							}
+
+							
+							if(status != PH_ERR_SUCCESS)
+							{
+								#ifdef dbg
+								printf("<<激活14443A卡失败  \r\n");
+								#endif
+								memcpy(SEND_DATA_BUF,no_card_one,11);
+								
+								if(USART_BUF[3]==0x40)  //与发送同步
+									SEND_DATA_BUF[3]=0x40;
+								else if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;	
+						
+								ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+								SEND_DATA_BUF[11]=crc_first;
+								SEND_DATA_BUF[12]=crc_second;
+								SEND_LENGTH=13;
+//								HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+								STATE2=0x00;
+						 } 							
+						 else if (status_2 == PH_ERR_SUCCESS) 
+						 {				
+							/*输出卡ID*/						
+								wake_Length=bLength	;
+								memcpy(wake_Uid,bUid,bLength);//将读取到的UID保存，以待唤醒
+								memcpy(SEND_DATA_BUF,send_one_type_14443a_start_one,15);	
+								memcpy(SEND_DATA_BUF+15,bUid,4);
+								if(USART_BUF[3]==0x40)  //与发送同步
+									SEND_DATA_BUF[3]=0x40;
+								else if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;	
+								ComputeCrc(2,(SEND_DATA_BUF+1),18,&crc_first,&crc_second);
+								SEND_DATA_BUF[19]=crc_first;
+								SEND_DATA_BUF[20]=crc_second;
+								SEND_LENGTH=26;
+//								HAL_UART_Transmit(&huart1,SEND_DATA_BUF,26,500);	
+								STATE2=0x00;
+								#ifdef dbg
+								printf("<<读取14443aUID成功  \r\n\r\n");									
+								#endif							
+					  }
+					  else if(status_2 != PH_ERR_SUCCESS)
+					  {
+								#ifdef dbg
+								printf("<<没有14443A卡  \r\n");
+								#endif
+								memcpy(SEND_DATA_BUF,no_card_one,11);
+								
+								if(USART_BUF[3]==0x40)  //与发送同步
+									SEND_DATA_BUF[3]=0x40;
+								else if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;	
+						
+								ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+								SEND_DATA_BUF[11]=crc_first;
+								SEND_DATA_BUF[12]=crc_second;
+								SEND_LENGTH=13;
+//								HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+								STATE2=0x00;
+					 } 
+				}
+				else
+				{
+					#ifdef dbg
+					printf("<<没有14443A卡 配置14443a协议失败  \r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,no_card_one,11);	
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+					ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+					SEND_DATA_BUF[11]=crc_first;
+					SEND_DATA_BUF[12]=crc_second;
+					SEND_LENGTH=13;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+					STATE2=0x00;
+			 }			
+				break;
+		 } //end if 0x01  读14443aUID
+							
+				
+		//连接命令
+	case 0x02: 
+	 {															
+			memcpy(wake_Uid,USART_BUF+9,0x04);//将读取到的UID保存，以待唤醒	
+      if(STATUS_APPLY_14443a==0x01)
+			{
+				for(int i=0;i<5;i++){
+						//激活卡
+					status=phpalI14443p3a_ActivateCard(&I14443p3a, wake_Uid, 0x04, bUid, &bLength, &bSak, &bMoreCardsAvailable);				
+					if (status == PH_ERR_SUCCESS)
+							break;
+			  }
+				if (status == PH_ERR_SUCCESS) 
+				{						
+					#ifdef dbg
+					printf("\r\n<<14443A存储 MIFARE 密钥到密钥库成功\r\n");
+					#endif	
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_connect_suc,8);				
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),7,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[8]=crc_first;
+					SEND_DATA_BUF[9]=crc_second;
+					SEND_LENGTH=10;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,10,500);	
+					STATE2=0x00;	
+				}
+				else
+				{
+					#ifdef dbg
+					printf("\r\n<<14443A存储 MIFARE 密钥到密钥库，激活卡失败\r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_connect_err,7);
+					
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),6,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[7]=crc_first;
+					SEND_DATA_BUF[8]=crc_second;
+					SEND_LENGTH=9;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,9,500);	
+					STATE2=0x00;	
+				}
+		}
+		else
+		{					  
+			#ifdef dbg
+			printf("\r\n<<14443A存储 MIFARE 密钥到密钥库，初始化15693协议失败\r\n");
+			#endif
+			memcpy(SEND_DATA_BUF,send_one_type_14443a_connect_err,7);
+			
+			if(USART_BUF[3]==0x40)  //与发送同步
+				SEND_DATA_BUF[3]=0x40;
+			else if(USART_BUF[3]==0x00)
+				SEND_DATA_BUF[3]=0x00;	
+									
+			ComputeCrc(2,(SEND_DATA_BUF+1),6,&crc_first,&crc_second);  //添加校验位
+			SEND_DATA_BUF[7]=crc_first;
+			SEND_DATA_BUF[8]=crc_second;
+			SEND_LENGTH=9;
+//			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,9,500);		
+			STATE2=0x00;	
+		}
+		break;
+	}  //end if 0x10  连接
+	
+	 
+	 
+		//认证命令
+case 0x04:
+	 {			
+			_43block=USART_BUF[9];//认证数据块地址				
+			memcpy(_43Key,USART_BUF+12,6);//秘钥
+	    if(STATUS_APPLY_14443a==0x01)
+			{			
+				  for(int i=0;i<5;i++){
+					//激活卡
+					status=phpalI14443p3a_ActivateCard(&I14443p3a, wake_Uid, 4, bUid, &bLength, &bSak, &bMoreCardsAvailable);
+					if(status == PH_ERR_SUCCESS)
+						break;
+				}
+					if(status == PH_ERR_SUCCESS)
+					{
+							status_2=phKeyStore_SetKey(&Rc663keyStore, 0, 0,PH_KEYSTORE_KEY_TYPE_MIFARE, &_43Key[0], 0);
+							key_type=USART_BUF[10];
+								/*验证指定块的密钥*/
+							if(key_type==0x60)  //认证类型keyA
+							status_2 = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYA, 0, 0, wake_Uid, 0x04);
+							else if(key_type==0x61)  //认证类型keyB
+							status_2 = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYB, 0, 0, wake_Uid, 0x04);
+					}
+				
+				if(status != PH_ERR_SUCCESS) //认证失败
+				{
+					#ifdef dbg
+					printf("\r\n<<14443A验证指定块的密钥，激活卡失败\r\n");		
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_err,13);
+					
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE2=0x00; 
+				}
+				else if (status_2 == PH_ERR_SUCCESS)  //认证成功
+				{															
+					#ifdef dbg
+					printf("\r\n<<14443A认证秘钥成功\r\n");													
+					#endif		
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_suc,11);				
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[11]=crc_first;
+					SEND_DATA_BUF[12]=crc_second;
+					SEND_LENGTH=13;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);		
+					STATE2=0x00; 
+				}
+				else if(status_2 != PH_ERR_SUCCESS) //认证失败
+				{
+					#ifdef dbg
+					printf("\r\n<<14443A验证指定块的密钥失败\r\n");		
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_err,13);
+					
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE2=0x00; 
+				}
+			}
+			else
+			{
+					#ifdef dbg
+					printf("\r\n<<14443A验证指定块的密钥,初始化14443a协议失败\r\n");		
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_err,13);
+					
+					if(USART_BUF[3]==0x40)  //与发送同步
+						SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+											
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE2=0x00; 
+			}					
+			break;
+	 }  
+			
+			 
+	//读数据命令			 
+  case 0x08:  
+	{			
+						/*从指定块读数据*/
+		 _43block=USART_BUF[9];	
+     if(STATUS_APPLY_14443a==0x01)
+			{		
+				  _43w_status = phalMfc_Read(&alMfc, _43block, _43r_buf);
+
+				if (_43w_status == PH_ERR_SUCCESS)
+				{
+					#ifdef dbg
+					printf("\r\n<<14443a读取数据成功 \r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_read_suc,11);
+					memcpy(SEND_DATA_BUF+11,_43r_buf,16);
+					if(USART_BUF[3]==0x40)  //与发送同步
+					SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+					
+					ComputeCrc(2,(SEND_DATA_BUF+1),26,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[27]=crc_first;
+					SEND_DATA_BUF[28]=crc_second;
+					SEND_LENGTH=29;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,29,500);		
+					STATE2=0x00;
+				}
+				else
+				{
+					#ifdef dbg
+					printf("\r\n<<14443a读取数据失败\r\r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_read_err,13);
+					if(USART_BUF[3]==0x40)  //与发送同步
+					SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+					
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);		
+					STATE2=0x00;
+					for(int i=0;i<5;i++){					
+					//激活卡
+					status=phpalI14443p3a_ActivateCard(&I14443p3a, wake_Uid, 0x04, bUid, &bLength, &bSak, &bMoreCardsAvailable);
+					if(status == PH_ERR_SUCCESS)
+						break;
+				}
+					if(status == PH_ERR_SUCCESS)
+					{
+						status=phKeyStore_SetKey(&Rc663keyStore, 0, 0,PH_KEYSTORE_KEY_TYPE_MIFARE, &_43Key[0], 0);
+						/*验证指定块的密钥*/
+						if(key_type==0x60)  //认证类型keyA
+						status = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYA, 0, 0, wake_Uid, 0x04);
+						else if(key_type==0x61)  //认证类型keyB
+						status = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYB, 0, 0, wake_Uid, 0x04);		
+				 }					
+				}		
+			}  //end if((STATE2&0x40)==0x40)  
+			else
+			{
+				#ifdef dbg
+				printf("<<14443a读取数据 初始化1444a协议失败   \r\n\r\n");
+				#endif
+				memcpy(SEND_DATA_BUF,send_one_type_14443a_read_err,13);
+				if(USART_BUF[3]==0x40)  //与发送同步
+				SEND_DATA_BUF[3]=0x40;
+				else if(USART_BUF[3]==0x00)
+				SEND_DATA_BUF[3]=0x00;	
+				
+				ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+				SEND_DATA_BUF[13]=crc_first;
+				SEND_DATA_BUF[14]=crc_second;
+				SEND_LENGTH=15;
+//				HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);		
+				STATE2=0x00;	
+			}
+			break;
+		}
+	 
+			 //写数据命令			
+	case 0x10:  
+	  {						
+			_43block=USART_BUF[9];
+			memcpy(_43w_buf,USART_BUF+12,16);
+			if(STATUS_APPLY_14443a==0x01)
+			{				
+				/*写数据到指定块*/
+					_43r_status = phalMfc_Write(&alMfc, _43block, _43w_buf);
+				if (_43r_status == PH_ERR_SUCCESS)
+				{
+					#ifdef dbg
+					printf("\r\n<<14443a写入成功\r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_write_suc,11);
+					if(USART_BUF[3]==0x40)  //与发送同步
+					SEND_DATA_BUF[3]=0x40;
+					else
+					if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+					
+					ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[11]=crc_first;
+					SEND_DATA_BUF[12]=crc_second;
+					SEND_LENGTH=13;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);		
+					STATE2=0x00; 
+			 }
+			 else
+			 {
+					#ifdef dbg
+					printf("\r\n<<14443a写入数据失败\r\n");
+					#endif
+					memcpy(SEND_DATA_BUF,send_one_type_14443a_write_err,13);
+					if(USART_BUF[3]==0x40)  //与发送同步
+					SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+					
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE2=0x00; 
+					for(int i=0;i<5;i++){
+					//激活卡
+					status=phpalI14443p3a_ActivateCard(&I14443p3a, wake_Uid, 0x04, bUid, &bLength, &bSak, &bMoreCardsAvailable);
+					if(status == PH_ERR_SUCCESS)
+						break;
+				 }
+					if(status == PH_ERR_SUCCESS)
+					{				
+						status=phKeyStore_SetKey(&Rc663keyStore, 0, 0,PH_KEYSTORE_KEY_TYPE_MIFARE, &_43Key[0], 0);
+							/*验证指定块的密钥*/
+						if(key_type==0x60)  //认证类型keyA
+						status = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYA, 0, 0, wake_Uid, 0x04);
+						else if(key_type==0x61)  //认证类型keyB
+						status = phalMfc_Authenticate(&alMfc, _43block, PHHAL_HW_MFC_KEYB, 0, 0, wake_Uid, 0x04);		
+				 }					
+			}		
+		}
+		else
+		{
+			#ifdef dbg
+			printf("\r\n<<14443a写入数据，配置14443a协议失败\r\n");
+			#endif
+			memcpy(SEND_DATA_BUF,send_one_type_14443a_write_err,13);
+			if(USART_BUF[3]==0x40)  //与发送同步
+			SEND_DATA_BUF[3]=0x40;
+			else
+			if(USART_BUF[3]==0x00)
+			SEND_DATA_BUF[3]=0x00;	
+			
+			ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);  //添加校验位
+			SEND_DATA_BUF[13]=crc_first;
+			SEND_DATA_BUF[14]=crc_second;
+			SEND_LENGTH=15;
+//			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+			STATE2=0x00; 
+		}
+		break;	
+	 } //	if((STATE2&0x80)==0x80) 
+			default :
+				break;
+  }
+}//end task
+
+
+
+
+
+
+

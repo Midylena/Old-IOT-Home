@@ -9,14 +9,14 @@ const int pinoSensor = D1;
 void setup() {
  
   Serial.begin(115200);                 //Serial connection
-  WiFi.begin("MILENAREDE", "Fa1718280317");   //WiFi connection
+  WiFi.begin("TP-Link_0DA2", "34825686");   //WiFi connection
  
   while (WiFi.status() != WL_CONNECTED) {  //Wait for the WiFI connection completion
  
   delay(1000);
   Serial.println("CONECTANDO...");
 
-  pinMode(pinoSensor, INPUT_PULLUP);
+  pinMode(pinoSensor, INPUT);
   }
 }
  
@@ -38,7 +38,7 @@ void loop() {
       HTTPClient http;
       
       // Send request
-      http.begin(client, "http://192.168.0.120:8080/historico/post");
+      http.begin(client, "http://192.168.10.100:8080/historico/post");
       http.addHeader("Content-Type", "application/json");
       http.POST("{\"comodo\": \"Cozinha\",\"numComodo\": 2}");
       

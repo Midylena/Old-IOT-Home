@@ -17,7 +17,7 @@ public class Conexao extends AsyncTask<Void, Void, Historico> {
     protected Historico doInBackground(Void... voids) {
         StringBuilder resposta = new StringBuilder();
         try {
-            URL url = new URL("http://192.168.0.120:8080/historico/get");
+            URL url = new URL("http://192.168.0.120:8080/historicoOldIotHome/get");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Content-Type","application/json");

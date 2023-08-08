@@ -1,0 +1,616 @@
+#include "bsp_task4.h"
+#include "include.h"
+
+#define   NUMBER  11
+
+//#define  dbg_4
+
+void Many_Car(void )
+{
+
+  static uint8_t nub_last=0;
+  static uint8_t UUID_last[NUMBER][8];	
+  static	uint32_t   tim=0,old_tim=0,item;
+	unsigned char crc_first=0,crc_second=0;  //crc校验位
+	uint8_t UUID[NUMBER][8];
+	uint8_t pUid_2[8];
+
+	uint16_t status_2=0;
+	uint8_t nub=0;
+	uint8_t num=0;
+	
+	uint8_t ppUidLength=0;
+	
+	uint8_t  pMoreCardsAvailable_2;
+	
+	uint8_t wide=0;
+	uint8_t lenght=0; 
+	
+	uint8_t UID_MASK_level[8]={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+	
+	static uint8_t UID_MASK_0[8]={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+	static uint8_t UID_MASK_1[8]={0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00};	
+
+	uint16_t number_state2;   //记录上一时刻的状态
+	uint8_t iso_14443a_flag=0x00;
+
+	number_state2 = 0x00;
+	#ifdef  dbg_4_task
+	printf("this is task 4 \r\n");
+	#endif
+	if(MANY_STATE)
+	{
+			SYSTICK_getVal(&old_tim);	
+			nub=0x00;
+//			STATUS_APPLY_15693=0x00;
+			if( STATUS_APPLY_15693==0x00)
+				{	
+				  #ifdef dbg_4
+					printf("进入 STATUS_APPLY_15693    \r\n");
+					printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif
+					for(int i=0;i<5;i++)
+					{
+							status = phhalHw_ApplyProtocolSettings(&halReader, PHHAL_HW_CARDTYPE_ISO15693);
+						  
+							#ifdef dbg_4
+							printf("STATUS_APPLY_15693=   %02x\r\n",STATUS_APPLY_15693);
+					   	printf("  phhalHw_ApplyProtocolSettings status=%02x					\r\n",status);
+						  #endif
+						  if(status==0x00)
+							{
+								status_2 = phhalHw_FieldReset(&halReader);  //这个函数必须要，不要会导致不能读卡
+								if(status_2==0x00)
+								{
+									STATUS_APPLY_15693=0x01;
+									STATUS_APPLY_14443a=0x00;
+									break;
+							  }		
+							  else 
+							  {
+									STATUS_APPLY_15693=0x00;
+							  }
+						 }
+						 delay_ms(10);
+					}  
+					#ifdef dbg_4					
+					printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif
+				}			
+				
+				#ifdef dbg_4
+				printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+				#endif		
+				if(STATUS_APPLY_15693 == 0x01)
+				{
+						status = phpalSli15693_ActivateCard(&palSli, 
+																								PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																								PHPAL_SLI15693_FLAG_NBSLOTS | PHPAL_SLI15693_FLAG_DATA_RATE,
+																								0xFF, 
+																								NULL, 
+																								0x00,
+																								&bDsfid, 
+																								pUid,
+																								&bMoreCardsAvaliable);
+						#ifdef dbg_4
+						printf("first phpalSli15693_ActivateCard status =%02x \r\n ",status);			
+						printf("first phpalSli15693_ActivateCard bMoreCardsAvaliable =%02x \r\n",bMoreCardsAvaliable);
+						printf("UID is =");
+						for(int i=0;i<8;i++)
+							printf(" %02x ",pUid[i]);
+						printf("\r\n");		
+						printf("  first nub_last=%02x \r\n",nub_last);	
+						printf("  first nub=%02x \r\n",nub);	
+						#endif
+						for(int i=0;i<nub_last;i++)
+						{
+							status_2 = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_NBSLOTS | PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										UUID_last[i], 
+																										0x40,
+																										&bDsfid, 
+																										pUid_2,
+																										&pMoreCardsAvailable_2);
+							#ifdef dbg_4
+							printf("UUID_last is =");
+							for(int j=0;j<8;j++)
+								printf(" %02x ",UUID_last[i][j]);
+							printf("\r\n");
+							
+							printf("second phpalSli15693_ActivateCard status_2 =%02x \r\n ",status_2);			
+							printf("second phpalSli15693_ActivateCard pMoreCardsAvailable_2 =%02x \r\n",pMoreCardsAvailable_2);
+							#endif	
+							if(status_2==0x00)
+							{
+								memcpy(UUID[nub],UUID_last[i],8);
+								nub++;
+								phpalSli15693_StayQuiet(&palSli);			
+								if(nub >= (NUMBER-1))
+										break;				
+							}
+						}
+						#ifdef  dbg_4
+						printf(" 已激活的卡 nub=%02x \r\n",nub);	
+						#endif 
+						//开始防冲突
+						if(bMoreCardsAvaliable)
+						{						
+							#ifdef dbg_4				
+								printf(" 进入防冲突循环 \r\n");
+							#endif
+							while(1)
+								{				
+									#ifdef dbg_4
+									printf("\r\n \r\n  ppUidLength=%02x\r\n",ppUidLength);
+									for(int kk=0;kk<8;kk++)
+										printf("  %02x  ",UID_MASK_level[kk]);
+									printf("\r\n");
+									#endif
+									
+									if(nub >= (NUMBER-1))
+											break;
+									
+									SYSTICK_getVal(&tim);  //得到当前时间戳
+									if(tim>=old_tim)
+										item=tim-old_tim;
+									else
+										item=0xffffffff-old_tim+tim;  //计算总用时时间
+									if(item>800)
+										break;
+										
+									
+									/* 第一次防冲突   寻找防冲突的点   level 0*/			
+									status = phpalSli15693_Inventory(
+																								 &palSli,      /**< [In] Pointer to this layers parameter structure. */
+																								 PHPAL_SLI15693_FLAG_NBSLOTS|PHPAL_SLI15693_FLAG_DATA_RATE,          /**< [In] Request flags byte. */
+																								 0x00,            /**< [In] Application Family Identifier. */
+																								 UID_MASK_level,         /**< [In] UID mask, holding known UID bits. */
+																								 ppUidLength,  /**< [In] Number of UID bits within pMask. */
+																								 &bDsfid,         /**< [Out] Data Storage Format Identifier. */
+																								 pUid           /**< [Out] Received UID. */
+																								 );	
+									#ifdef dbg_4
+									printf("level 0  phpalSli15693_Inventory status=  %02x\r\n",status);	
+									printf("level 0  phpalSli15693_Inventory number_state2=  %02x\r\n",number_state2);	
+									#endif
+									
+									if(status==0x0203)	  //有冲突
+									{
+										ppUidLength++;
+									}		
+									else if(status==0x00) //没有冲突
+									{		
+											phpalSli15693_StayQuiet(&palSli);
+											ppUidLength++;
+											#ifdef dbg_4
+											printf("the UID\r\n");
+											for(int cc=0;cc<8;cc++)
+												printf("  %02x  ",pUid[cc] );
+											printf("\r\n");
+											#endif
+
+											for(int i=0;i<8;i++) //保存UID
+												UUID[nub][i] = pUid[i];
+											nub++;
+											if(nub >= (NUMBER-1))
+												break;
+											//						printf("  third 1 nub=%02x \r\n",nub);							
+											wide=ppUidLength/8;
+											lenght=ppUidLength%8;
+											UID_MASK_level[wide] |=1<<(lenght-1);																
+
+											#ifdef dbg_4
+											printf("an_li ppUidLength 33=%02x\r\n",ppUidLength);
+											for(int kk=0;kk<8;kk++)
+												printf("  %02x  ",UID_MASK_level[kk]);
+											printf("\r\n");
+											#endif																
+											status = phpalSli15693_Inventory(
+																											 &palSli,      /**< [In] Pointer to this layers parameter structure. */
+																											 PHPAL_SLI15693_FLAG_NBSLOTS|PHPAL_SLI15693_FLAG_DATA_RATE,          /**< [In] Request flags byte. */
+																											 0x00,            /**< [In] Application Family Identifier. */
+																											 UID_MASK_level,         /**< [In] UID mask, holding known UID bits. */
+																											 ppUidLength,  /**< [In] Number of UID bits within pMask. */
+																											 &bDsfid,         /**< [Out] Data Storage Format Identifier. */
+																											 pUid           /**< [Out] Received UID. */
+																											 );	
+											#ifdef dbg_4
+											printf("level 0  phpalSli15693_Inventory 33 status=  %02x\r\n",status);	
+											printf("level 0  phpalSli15693_Inventory number_state2=  %02x\r\n",number_state2);	
+											#endif
+										  if(status==0x0203)	  //有冲突
+											{
+													ppUidLength++;
+											}	
+										  else 
+											{										
+													phpalSli15693_StayQuiet(&palSli);
+													#ifdef dbg_4
+													printf("the UID\r\n");
+													for(int cc=0;cc<8;cc++)
+														printf("  %02x  ",pUid[cc] );
+													printf("\r\n");
+													#endif
+													if(status==0x0000)
+													{
+														for(int i=0;i<8;i++) //保存UID
+																UUID[nub][i] = pUid[i];
+														nub++;	
+														if(nub >= (NUMBER-1))
+															break;
+													}
+													#ifdef dbg_4
+													printf("  third 2 nub=%02x \r\n",nub);
+													#endif
+												
+												
+													status = phpalSli15693_Inventory(
+																													 &palSli,      /**< [In] Pointer to this layers parameter structure. */
+																													 PHPAL_SLI15693_FLAG_NBSLOTS|PHPAL_SLI15693_FLAG_DATA_RATE,          /**< [In] Request flags byte. */
+																													 0x00,            /**< [In] Application Family Identifier. */
+																													 UID_MASK_0,         /**< [In] UID mask, holding known UID bits. */
+																													 0x01,  /**< [In] Number of UID bits within pMask. */
+																													 &bDsfid,         /**< [Out] Data Storage Format Identifier. */
+																													 pUid           /**< [Out] Received UID. */
+																													 );	
+													#ifdef dbg_4
+													printf("level 0  phpalSli15693_Inventory status_0=  %02x\r\n",status);	
+													#endif
+													if(status==0x00)
+													{ 
+															phpalSli15693_StayQuiet(&palSli);
+															#ifdef dbg_4
+															printf("the UID\r\n");
+															for(int cc=0;cc<8;cc++)
+																printf("  %02x  ",pUid[cc] );
+															printf("\r\n");
+															#endif
+														
+															for(int i=0;i<8;i++) //保存UID
+																	UUID[nub][i] = pUid[i];
+															nub++;		
+															if(nub >= (NUMBER-1))
+																break;
+				//											printf("  third 3 nub=%02x \r\n",nub);						
+															status = phpalSli15693_Inventory(
+																												 &palSli,      /**< [In] Pointer to this layers parameter structure. */
+																												 PHPAL_SLI15693_FLAG_NBSLOTS|PHPAL_SLI15693_FLAG_DATA_RATE,          /**< [In] Request flags byte. */
+																												 0x00,            /**< [In] Application Family Identifier. */
+																												 UID_MASK_1,         /**< [In] UID mask, holding known UID bits. */
+																												 0x01,  /**< [In] Number of UID bits within pMask. */
+																												 &bDsfid,         /**< [Out] Data Storage Format Identifier. */
+																												 pUid           /**< [Out] Received UID. */
+																												 );											
+															#ifdef dbg_4
+															printf("level 0  phpalSli15693_Inventory status_1=  %02x\r\n",status);	
+															#endif
+															if(status==0x00)
+															{
+																phpalSli15693_StayQuiet(&palSli);
+																#ifdef dbg_4
+																printf("the UID\r\n");
+																for(int cc=0;cc<8;cc++)
+																	printf("  %02x  ",pUid[cc] );
+																printf("\r\n");
+																#endif
+																
+																for(int i=0;i<8;i++) //保存UID
+																	UUID[nub][i] = pUid[i];
+																nub++;
+																break;
+															}
+															else if(status==0x0203)
+															{
+																ppUidLength=0x02;
+																for(int c=0;c<8;c++)
+																	UID_MASK_level[c]=0x00;
+																UID_MASK_level[0]=0x01;
+															}
+															else if(status==0x0201)
+																	break;		
+											}
+											else if(status==0x0203)
+											{
+													ppUidLength=0x02;
+													for(int c=0;c<8;c++)
+														UID_MASK_level[c]=0x00;
+											}
+											else
+											{																																		
+													status = phpalSli15693_Inventory(
+																													 &palSli,      /**< [In] Pointer to this layers parameter structure. */
+																													 PHPAL_SLI15693_FLAG_NBSLOTS|PHPAL_SLI15693_FLAG_DATA_RATE,          /**< [In] Request flags byte. */
+																													 0x00,            /**< [In] Application Family Identifier. */
+																													 UID_MASK_1,         /**< [In] UID mask, holding known UID bits. */
+																													 0x01,  /**< [In] Number of UID bits within pMask. */
+																													 &bDsfid,         /**< [Out] Data Storage Format Identifier. */
+																													 pUid           /**< [Out] Received UID. */
+																													 );											
+													#ifdef dbg_4
+													printf("level 0  phpalSli15693_Inventory status_1=  %02x\r\n",status);	
+													#endif
+													if(status==0x00)
+													{
+														phpalSli15693_StayQuiet(&palSli);
+														#ifdef dbg_4
+														printf("the UID\r\n");
+														for(int cc=0;cc<8;cc++)
+															printf("  %02x  ",pUid[cc] );
+														printf("\r\n");
+														#endif
+														for(int i=0;i<8;i++) //保存UID
+															UUID[nub][i] = pUid[i];
+														nub++;	
+														break;
+												}
+												else if(status==0x0203)
+												{
+														ppUidLength=0x02;
+														for(int c=0;c<8;c++)
+															UID_MASK_level[c]=0x00;
+														UID_MASK_level[0]=0x01;
+												}
+												else if(status==0x0201)
+														break;
+											}							
+										}							
+									}
+									else if(status==0x0201)
+									{
+										ppUidLength--;
+										if(ppUidLength>64)
+										{
+											ppUidLength=0x00;
+											break;
+										}
+										if(number_state2 == 0x0203)
+											UID_MASK_level[ppUidLength>>4] |=1<<ppUidLength;  //右移4位相当于除以8   左移ppUidLength相当于对应的位置1
+										else
+										{
+											wide=ppUidLength/8;
+											lenght=ppUidLength%8;
+											UID_MASK_level[wide]=UID_MASK_level[wide]>>1;
+										}
+										ppUidLength++;
+								 }
+								 number_state2=status;	
+							 } //end while 
+						}
+						else if(status==0)
+						{
+							for(num=0;num<nub;num++)
+							{
+							 if( memcmp(UUID[num],pUid,8)==0)
+									break;
+							}							
+							if(num==nub)
+							{
+									memcpy(UUID[nub],pUid,8);
+									nub++;		
+							}							
+						}
+					}
+				
+				status = phhalHw_FieldOff(&halReader);  //这个函数必须要，不要会导致不能读卡
+				for(int i=0;i<3;i++)
+					{
+							status = phhalHw_ApplyProtocolSettings(&halReader,PHHAL_HW_CARDTYPE_ISO14443A);  //将卡的类型设为PHHAL_HW_CARDTYPE_ISO14443A  时间类型设为ms  配置timer寄存器  shadow赋值 写入协议类型
+							#ifdef dbg_4
+							printf("phhalHw_ApplyProtocolSettings=   %02x\r\n",status);
+						  #endif
+						  if(status==0x00)
+							{							
+									STATUS_APPLY_15693=0x00;
+									STATUS_APPLY_14443a=0x01;
+									break;
+						  }		
+							else 
+							{
+									STATUS_APPLY_14443a=0x00;
+							}
+					}
+			status_2 = phhalHw_FieldOn(&halReader);  //这个函数必须要，不要会导致不能读�
+			if(!(status_2&&status))	
+				{
+				for(int i=0;i<3;i++)
+					{
+					//激活卡
+					status = phpalI14443p3a_ActivateCard(&I14443p3a, 
+																								NULL, 
+																								0x00, 
+																								bUid, 
+																								&bLength, 
+																								&bSak, 
+																								&bMoreCardsAvailable);	
+				
+					if(status == PH_ERR_SUCCESS)
+						break;
+					}
+					#ifdef dbg_4
+					printf("phpalI14443p3a_ActivateCard status=%02x \r\n",status);
+					#endif
+					if (status == PH_ERR_SUCCESS) 
+					{
+						status_2 = phpalI14443p3a_GetSerialNo(&I14443p3a, bUid,&bLength);
+						#ifdef dbg_4
+						printf("time phpalI14443p3a_GetSerialNo status_2=%02x \r\n",status_2);
+						#endif
+					
+					if(status_2==PH_ERR_SUCCESS)
+					{
+					 memcpy(UUID[nub],bUid,4);
+					 iso_14443a_flag=0x01;
+					}
+					else
+					{
+					iso_14443a_flag=0x00;					
+					}
+				 }
+			 }
+//   printf(" iso_14443a_flag=%02x \r\n",iso_14443a_flag);
+			
+			
+			
+			
+		#ifdef dbg_4
+		printf("总共卡的数量为 nub =  %02x \r\n",nub);
+		#endif
+			
+		if(nub!=0)
+		{	
+			#ifdef dbg
+			printf("<<多标签读取的15693卡UID nub= %02x\r\n\r\n",nub);					
+			#endif 
+			
+			memcpy(SEND_DATA_BUF,send_many_type_UID,11);
+			if(iso_14443a_flag==0x01)
+			{
+			SEND_DATA_BUF[8]=nub+1;
+			SEND_DATA_BUF[10]=nub+1;
+			#ifdef dbg
+			printf("卡的数量为  %02x \r\n",nub);
+			#endif
+			}
+			else
+			{
+			SEND_DATA_BUF[8]=nub;
+			SEND_DATA_BUF[10]=nub;
+			#ifdef dbg
+			printf("卡的数量为  %02x \r\n",nub-1);
+			#endif
+			}
+			if(iso_14443a_flag==0x01)
+				SEND_DATA_BUF[1]=20+nub*13;
+			else
+			  SEND_DATA_BUF[1]=12+nub*13;
+			memcpy(SEND_DATA_BUF+11,send_many_type_15693_space_mark+1,4);
+			memcpy(SEND_DATA_BUF+15,UUID[0],8);
+			for(int i=1;i<nub ;i++)
+			{
+				memcpy(SEND_DATA_BUF+23+13*(i-1),send_many_type_15693_space_mark,5);
+				memcpy(SEND_DATA_BUF+28+13*(i-1),UUID[i],8);						
+			}
+			SEND_DATA_BUF[10+13*nub]=0x00;
+			if(iso_14443a_flag==0x01)
+			{
+			memcpy(SEND_DATA_BUF+11+13*nub,send_many_type_14443a_space_mark,4);
+			memcpy(SEND_DATA_BUF+15+13*nub,UUID[nub],4);
+			}
+			
+			if(USART_BUF[3]==0x40)
+			SEND_DATA_BUF[3]=0x40;
+			else
+			if(USART_BUF[3]==0x00)
+			SEND_DATA_BUF[3]=0x00;	
+			
+			ComputeCrc(2,(SEND_DATA_BUF+1),(SEND_DATA_BUF[1]-2),&crc_first,&crc_second);
+			SEND_DATA_BUF[(SEND_DATA_BUF[1]-1)]=crc_first;
+			SEND_DATA_BUF[SEND_DATA_BUF[1]]=crc_second;
+			SEND_LENGTH=SEND_DATA_BUF[1]+1;
+//			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,(SEND_DATA_BUF[1]+1),50);
+			
+			#ifdef dbg_4
+			printf("<<多标签读取的15693卡和14443a卡  \r\n");					
+			#endif 
+			
+			#ifdef dbg_4_uart_TX
+			printf("发送数据为：");
+			for(int i=0;i<(SEND_DATA_BUF[1]+1);i++)
+				printf("  %02x",SEND_DATA_BUF[i]);
+			printf("\r\n");
+			#endif
+			
+			#ifdef dbg
+				printf("UUID is \r\n");
+			for(int i=0;i<nub;i++)
+			{
+				for(int j=0;j<8;j++)
+					printf(" %02x ",UUID[i][j]);
+				printf("\r\n");
+			}
+			#endif	
+			
+			
+			for(int i=0;i<nub;i++)
+				memcpy(UUID_last[i],UUID[i],8);
+				
+			#ifdef dbg
+				printf("UUID_last is \r\n");
+			for(int i=0;i<nub;i++)
+			{
+				for(int j=0;j<8;j++)
+					printf(" %02x ",UUID_last[i][j]);
+				printf("\r\n");
+			}
+			#endif
+			
+			nub_last=nub;
+			MANY_STATE=0x00;
+//					vTaskPrioritySet(NULL,4);
+		}
+		else if(iso_14443a_flag==0x01)
+		{			
+			memcpy(SEND_DATA_BUF,send_many_type_UID,11);
+			SEND_DATA_BUF[8]=1;
+			SEND_DATA_BUF[10]=1;
+			SEND_DATA_BUF[1]=0x14;
+			memcpy(SEND_DATA_BUF+11,send_many_type_14443a_space_mark,4);
+			memcpy(SEND_DATA_BUF+15,UUID[0],4);
+			
+			
+			if(USART_BUF[3]==0x40)
+			SEND_DATA_BUF[3]=0x40;
+			else
+			if(USART_BUF[3]==0x00)
+			SEND_DATA_BUF[3]=0x00;	
+			
+			ComputeCrc(2,(SEND_DATA_BUF+1),(SEND_DATA_BUF[1]-2),&crc_first,&crc_second);
+			SEND_DATA_BUF[(SEND_DATA_BUF[1]-1)]=crc_first;
+			SEND_DATA_BUF[SEND_DATA_BUF[1]]=crc_second;
+			SEND_LENGTH=SEND_DATA_BUF[1]+1;
+//			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,(SEND_DATA_BUF[1]+1),100);
+			#ifdef dbg_4
+			printf("<<多标签读取的14443a卡\r\n");					
+			#endif 
+			
+			#ifdef dbg_4_uart_TX
+			printf("发送数据为：");
+			for(int i=0;i<(SEND_DATA_BUF[1]+1);i++)
+				printf("  %02x",SEND_DATA_BUF[i]);
+			printf("\r\n");
+			#endif
+					
+			nub_last=nub;
+			MANY_STATE=0x00;	
+		}
+		else if(nub==0x00)
+		{
+			#ifdef dbg_4
+				printf("<<多标签读取，没有15693卡   \r\n\r\n");		
+			#endif
+				memcpy(SEND_DATA_BUF,no_card_one,11);
+				if(USART_BUF[3]==0x40)  //与发送同步
+					SEND_DATA_BUF[3]=0x40;
+				else
+					if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+	
+				ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+				SEND_DATA_BUF[11]=crc_first;
+				SEND_DATA_BUF[12]=crc_second;
+				SEND_LENGTH=13;
+//				HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,100);	
+				#ifdef dbg_4_uart_TX
+				printf("发送数据为：");
+				for(int i=0;i<13;i++)
+					printf("  %02x",SEND_DATA_BUF[i]);
+				printf("\r\n");
+				#endif
+					
+				MANY_STATE=0x00;
+//						vTaskPrioritySet(NULL,4);
+		}
+	}		
+}//end task4

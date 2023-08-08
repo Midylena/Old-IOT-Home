@@ -1,0 +1,908 @@
+#include "bsp_task2.h"
+#include "include.h"
+
+unsigned char Afi=0;
+unsigned char Dsfid=0;
+
+
+/*
+15693读取任务
+*/
+void Iso_15693_Single(void)
+{		
+  uint8_t _63block=0;
+		/*15693初始化*/
+	unsigned char crc_first=0,crc_second=0;
+  unsigned char count=0;	
+	
+//	unsigned short status_cc;
+	uint16_t status_2;
+//	uint32_t   tim=0,old_tim=0,item,timout=0;
+		if( STATE!=0)
+		 {
+			  #ifdef dbg
+				printf("进入 STATE    \r\n");
+				#endif
+			 
+//  		  STATUS_APPLY_15693 = 0x00;
+				if( STATUS_APPLY_15693==0x00)
+				{	
+					#ifdef dbg
+					printf("进入 STATUS_APPLY_15693    \r\n");
+					printf(" STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif
+					for(int j=0;j<5;j++)
+					{
+//						  phhalHw_FieldOff(&halReader);
+							status = phhalHw_ApplyProtocolSettings(&halReader, PHHAL_HW_CARDTYPE_ISO15693);
+							#ifdef dbg
+							printf("STATUS_APPLY_15693=   %02x\r\n",STATUS_APPLY_15693);
+						  #endif
+						  if(status==0x00)
+							{
+								status_2 = phhalHw_FieldReset(&halReader);  //这个函数必须要，不要会导致不能读卡
+								if(status_2==0x00)
+								{
+									STATUS_APPLY_15693=0x01;
+									STATUS_APPLY_14443a=0x00;
+									break;
+							  }		
+							  else 
+							  {
+									STATUS_APPLY_15693=0x00;
+							  }
+							}
+					}
+					#ifdef dbg
+					printf("phhalHw_ApplyProtocolSettings status=%02x					\r\n",status);
+					printf("STATUS_APPLY_15693 =%02x   \r\n",STATUS_APPLY_15693);
+					#endif		
+				}
+		}
+	
+		 //单标签读取UID
+		switch (STATE)
+		{			
+			case 0x01:
+	  	{
+				if(STATUS_APPLY_15693==0x01)
+				{
+						for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}																										
+								if (status == PH_ERR_SUCCESS) 
+								{
+										/*获取UID*/
+										status_2 = phpalSli15693_GetSerialNo(&palSli, pUid, &bRxLength);
+								}					
+						  if(status != PH_ERR_SUCCESS)
+							{
+									#ifdef dbg
+								    printf("phpalSli15693_ActivateCard   status =%02x\r\n",status);
+										printf("<<读15693卡UID  激活卡失败   \r\n\r\n");		
+									#endif
+									memcpy(SEND_DATA_BUF,no_card_one,11);
+									if(USART_BUF[3]==0x40)  //与发送同步
+										SEND_DATA_BUF[3]=0x40;
+									else
+										if(USART_BUF[3]==0x00)
+										SEND_DATA_BUF[3]=0x00;	
+						
+									ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+									SEND_DATA_BUF[11]=crc_first;
+									SEND_DATA_BUF[12]=crc_second;
+									SEND_LENGTH=13;
+//									HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);
+									STATE=0x00;
+						  }
+							else if(status_2 == PH_ERR_SUCCESS)   //成功读取UID
+							{
+
+									#ifdef dbg
+													printf("<<读取15693卡 UID成功  \r\n\r\n");								
+									#endif
+									memcpy(SEND_DATA_BUF,send_one_type_15693_start_one,15);
+									memcpy(SEND_DATA_BUF+15,pUid,8);
+									
+									if(USART_BUF[3]==0x40)  //与发送同步
+										SEND_DATA_BUF[3]=0x40;
+									else
+										if(USART_BUF[3]==0x00)
+										SEND_DATA_BUF[3]=0x00;	
+										
+									SEND_DATA_BUF[23]=0x00;
+									ComputeCrc(2,(SEND_DATA_BUF+1),23,&crc_first,&crc_second);
+									SEND_DATA_BUF[24]=crc_first;
+									SEND_DATA_BUF[25]=crc_second;
+									SEND_LENGTH=26;						    
+//								HAL_UART_Transmit(&huart1,SEND_DATA_BUF,26,500);		
+									STATE=0x00;
+							}
+							else if(status_2 != PH_ERR_SUCCESS)
+							{
+									#ifdef dbg
+										printf("<<没有15693卡   \r\n\r\n");		
+									#endif
+									memcpy(SEND_DATA_BUF,no_card_one,11);
+									if(USART_BUF[3]==0x40)  //与发送同步
+										SEND_DATA_BUF[3]=0x40;
+									else
+										if(USART_BUF[3]==0x00)
+										SEND_DATA_BUF[3]=0x00;	
+						
+									ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+									SEND_DATA_BUF[11]=crc_first;
+									SEND_DATA_BUF[12]=crc_second;
+									SEND_LENGTH=13;
+//									HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);
+									STATE=0x00;
+						 }	
+			 }
+			 else
+			 {
+						#ifdef dbg
+							printf("<<读取15693卡UID时，初始化15693协议失败   \r\n\r\n");		
+						#endif
+						memcpy(SEND_DATA_BUF,no_card_one,11);
+						if(USART_BUF[3]==0x40)  //与发送同步
+							SEND_DATA_BUF[3]=0x40;
+						else
+							if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;	
+
+						ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+						SEND_DATA_BUF[11]=crc_first;
+						SEND_DATA_BUF[12]=crc_second;
+						SEND_LENGTH=13;
+//						HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);
+						STATE=0x00;		 
+			 }
+		break;
+  }  //end	if((STATE&0x02)==0x02)  读uid
+			
+
+	/*单标签读取数据块	*/
+		case 0x02:
+			{
+				memcpy(pMask,USART_BUF+11,8);  //复制UID
+				if(STATUS_APPLY_15693==0x01)
+				{				
+							for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}
+							
+						 if(status==PH_ERR_SUCCESS)
+						 {
+								memcpy(SEND_DATA_BUF,send_one_type_15693_read_one,13);										
+								SEND_DATA_BUF[11]=USART_BUF[25];
+								SEND_DATA_BUF[1]=14+SEND_DATA_BUF[11]*5;
+								SEND_DATA_BUF[7]=5+SEND_DATA_BUF[11]*5;
+															
+								for(unsigned char i=0;i<USART_BUF[25];i++)  //读取多块数据
+								{
+									_63block= USART_BUF[23]+i;							
+									/*从指定块里读数据*/
+									_63r_status = phalI15693_ReadSingleBlock(&al15693, PHAL_I15693_OPTION_ON, _63block, &_63r_buf, &_63r_nbr);
+							//		  printf ("phalI15693_ReadSingleBlock\r\n");
+									if(PH_ERR_SUCCESS == _63r_status)//读取成功 ，将读取到的数据复制给发送字符串
+									{
+										memcpy((SEND_DATA_BUF+13+i*5),_63r_buf,5);
+									}
+									else  //读取失败，就退出循环，且把错误命令复制给发送字符串
+									{						
+										memcpy(SEND_DATA_BUF,read_one_type_err_15693,13);
+									}
+								}															
+						 }							
+					
+			  
+					  if(status!=0x00)
+						{
+							#ifdef dbg
+									printf("<<读取15693卡数据  激活卡时失败   \r\n\r\n"); //读取失败						
+							#	endif
+							 //第四位与发送命令对应
+							if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;
+							else if(USART_BUF[3]==0x40)
+									SEND_DATA_BUF[3]=0x40;	
+							ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+							SEND_DATA_BUF[13]=crc_first;
+							SEND_DATA_BUF[14]=crc_second;
+							SEND_LENGTH=15;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+							STATE=0x00;
+						}					
+				  	else if(PH_ERR_SUCCESS == _63r_status)  //读取成功发送校验位校验
+						{								
+							#ifdef dbg						
+									printf("<<读取15693卡数据成功,读取数据成功     \r\n\r\n");										
+							#	endif
+							 //第四位与发送命令对应
+							if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;
+							else if(USART_BUF[3]==0x40)
+									SEND_DATA_BUF[3]=0x40;	
+							ComputeCrc(2,(SEND_DATA_BUF+1),(12+5*USART_BUF[25]),&crc_first,&crc_second);
+							SEND_DATA_BUF[13+(USART_BUF[25]*5)]=crc_first;
+							SEND_DATA_BUF[14+(USART_BUF[25]*5)]=crc_second;
+							SEND_LENGTH=15+USART_BUF[25]*5;
+//							i=15+USART_BUF[25]*5;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,i,500);		
+							STATE=0x00;
+						}
+						else if(PH_ERR_SUCCESS != _63r_status)
+						{
+							
+							#ifdef dbg
+									printf("<<读取15693卡数据  读取卡数据时失败   \r\n\r\n"); //读取失败						
+							#	endif
+							 //第四位与发送命令对应
+							if(USART_BUF[3]==0x00)
+									SEND_DATA_BUF[3]=0x00;
+							else if(USART_BUF[3]==0x40)
+									SEND_DATA_BUF[3]=0x40;	
+							ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+							SEND_DATA_BUF[13]=crc_first;
+							SEND_DATA_BUF[14]=crc_second;
+							SEND_LENGTH=15;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+							STATE=0x00;
+							
+						}
+				}
+				else 
+				{
+					memcpy(SEND_DATA_BUF,read_one_type_err_15693,13);
+					//第四位与发送命令对应
+					if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;
+					else
+						if(USART_BUF[3]==0x40)
+							SEND_DATA_BUF[3]=0x40;	
+					#ifdef dbg
+							printf("<<读块数据，初始化15693协议失败     \r\n\r\n"); //读取失败						
+					#	endif
+					memcpy(SEND_DATA_BUF,read_one_type_err_15693,13);
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE=0x00;
+				}	
+				break;
+		}//end		if(STATE&0x04) 读数据
+				
+				
+				
+			/*标签写数据块*/
+
+	case 0x04:
+		{
+			memcpy(pMask,USART_BUF+11,8);
+			memcpy(SEND_DATA_BUF,send_one_type_15693_write_one,11);
+			if(STATUS_APPLY_15693==0x01)
+			{					
+					for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}
+				 if(status==PH_ERR_SUCCESS)
+				 {		
+						for(unsigned char i=0;i<USART_BUF[24];i++)  //写入块的数量
+						{
+								_63block= USART_BUF[22]+i;
+								count=26+4*i;
+									
+								memcpy(_63w_buf,USART_BUF+count,4);
+								/*往指定块里写数据*/
+								_63w_status = phalI15693_WriteSingleBlock(&al15693,PHAL_I15693_OPTION_ON, _63block,_63w_buf, _63w_nbr);					
+								if(PH_ERR_SUCCESS == _63w_status)//写入
+								memcpy(SEND_DATA_BUF,send_one_type_15693_write_one,11);				
+								else   //当写入失败，发货错误信息
+								{
+									memcpy(SEND_DATA_BUF,write_one_type_err_15693,13);
+								}																
+						}					
+				}
+       			
+				if(status!=PH_ERR_SUCCESS)
+				{
+						//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+							SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE=0x00;
+					#ifdef dbg
+					printf("<<15693写数据时激活卡失败     \r\n\r\n");
+					#endif				
+				}	
+				else if(PH_ERR_SUCCESS == _63w_status)//写入成功
+				{	
+					
+							//第四位与发送命令对应		
+						if(USART_BUF[3]==0x40)
+								SEND_DATA_BUF[3]=0x40;
+						else if(USART_BUF[3]==0x00)
+								SEND_DATA_BUF[3]=0x00;
+						ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+						SEND_DATA_BUF[11]=crc_first;
+						SEND_DATA_BUF[12]=crc_second;
+						SEND_LENGTH=13;
+//						HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+						STATE=0x00;
+						#ifdef dbg
+						printf("<<15693写数据成功   \r\n\r\n");
+						#endif			
+				}	
+				else if(PH_ERR_SUCCESS != _63w_status)
+				{
+								//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+							SEND_DATA_BUF[3]=0x40;
+					else if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE=0x00;
+					#ifdef dbg
+					printf("<<15693写数据时 写入数据失败   \r\n\r\n");
+					#endif		
+				}
+	 }
+	 else
+   {
+		memcpy(SEND_DATA_BUF,write_one_type_err_15693,13);
+		//第四位与发送命令对应		
+		if(USART_BUF[3]==0x40)
+				SEND_DATA_BUF[3]=0x40;
+		else
+			if(USART_BUF[3]==0x00)
+				SEND_DATA_BUF[3]=0x00;	
+		#ifdef dbg
+		printf("<<15693写数据,初始化15693协议失败  \r\n\r\n");
+		#endif	
+		ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+		SEND_DATA_BUF[13]=crc_first;
+		SEND_DATA_BUF[14]=crc_second;
+		SEND_LENGTH=15;
+//		HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+		STATE=0x00;
+	 }
+	 break;
+ }	// end if(STATE&0x08)写数据		
+
+
+
+//写AFI命令
+	case 0x08:
+		{
+			memcpy(pMask,USART_BUF+11,8);
+			memcpy(&Afi,USART_BUF+22,1);
+      if(STATUS_APPLY_15693==0x01)
+			{
+							for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}
+						 if(status==PH_ERR_SUCCESS)
+						 {		
+							status_2 =	phalI15693_WriteAFI(
+																					 &al15693,  /**< [In] Pointer to this layers parameter structure. */
+																					 PHAL_I15693_OPTION_ON,     /**< [In] Option flag; \c #PHAL_I15693_OPTION_OFF: disable; \c #PHAL_I15693_OPTION_ON: enable. */
+																					 Afi         /**< [In] Value of Application Family Identifier. */
+																					 );	
+	
+						 } //end if(status==PH_ERR_SUCCESS)
+
+	
+		 	if(PH_ERR_SUCCESS != status)
+       {
+					memcpy(SEND_DATA_BUF,write_AFI_err,13); 
+					
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE=0x00;
+					#ifdef dbg
+					printf("<<15693写AFI 激活卡时 失败    \r\n\r\n");
+					#endif				
+			 }				 
+      else if(PH_ERR_SUCCESS == status_2)//写入成功
+			 {	
+					memcpy(SEND_DATA_BUF,write_AFI_suc,11); 
+					
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+					SEND_DATA_BUF[11]=crc_first;
+					SEND_DATA_BUF[12]=crc_second;
+					SEND_LENGTH=13;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+					STATE=0x00;
+					#ifdef dbg
+					printf("<<15693写AFI成功    \r\n\r\n");
+					#endif			
+			 }
+      else if(PH_ERR_SUCCESS != status_2)
+       {
+					memcpy(SEND_DATA_BUF,write_AFI_err,13); 
+					
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+					STATE=0x00;
+					#ifdef dbg
+					printf("<<15693写AFI失败     \r\n\r\n");
+					#endif				
+			 }	
+		} 	 
+	 else
+    {
+				memcpy(SEND_DATA_BUF,write_AFI_err,13); 
+				
+				//第四位与发送命令对应		
+				if(USART_BUF[3]==0x40)
+					SEND_DATA_BUF[3]=0x40;
+				else
+					if(USART_BUF[3]==0x00)
+					SEND_DATA_BUF[3]=0x00;	
+				 
+				ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+				SEND_DATA_BUF[13]=crc_first;
+				SEND_DATA_BUF[14]=crc_second;
+				SEND_LENGTH=15;
+//				HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+				STATE=0x00;
+				#ifdef dbg
+				printf("<<15693写AFI失败,配置15693协议失败     \r\n\r\n");
+				#endif	
+	  } 
+		break;
+ }		//if(STATE&0x01)
+
+ 
+//锁AFI命令 
+ 
+ 
+ 
+case 0x10:
+		{
+			STATE&=0xef;
+			memcpy(pMask,USART_BUF+11,8);
+			memcpy(&Afi,USART_BUF+22,1);			
+		  if(STATUS_APPLY_15693==0x01)
+			{
+						  
+							for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}
+						 if(status==PH_ERR_SUCCESS)
+						 {		
+							status_2 =	phalI15693_LockAFI(
+																					 &al15693,  /**< [In] Pointer to this layers parameter structure. */
+																					 PHAL_I15693_OPTION_ON     /**< [In] Option flag; \c #PHAL_I15693_OPTION_OFF: disable; \c #PHAL_I15693_OPTION_ON: enable. */
+																					 );		
+						}
+					
+		  	if(status != PH_ERR_SUCCESS)
+		  	{
+					memcpy(SEND_DATA_BUF,lock_AFI_err,13); 				
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE&=0xef;
+					#ifdef dbg
+					printf("<<15693锁AFI，激活卡失败   \r\n\r\n");
+					#endif	
+		  	}		
+		  	else if(PH_ERR_SUCCESS == status_2)//写入成功
+			  {	
+					memcpy(SEND_DATA_BUF,lock_AFI_suc,11); 				
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;	
+					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+					SEND_DATA_BUF[11]=crc_first;
+					SEND_DATA_BUF[12]=crc_second;
+					SEND_LENGTH=13;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+					STATE&=0xef;
+					#ifdef dbg
+					printf("<<15693锁AFI成功     \r\n\r\n");
+					#endif			
+			 }
+       else	if(status_2 != PH_ERR_SUCCESS)//写入失败
+       {
+					memcpy(SEND_DATA_BUF,lock_AFI_err,13); 				
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE&=0xef;
+					#ifdef dbg
+					printf("<<15693锁AFI失败    \r\n\r\n");
+					#endif				
+			 }	
+		 }
+	 else
+    {
+			#ifdef dbg
+			printf("<<15693锁AFI失败,配置15693协议失败    \r\n\r\n");
+			#endif	
+			memcpy(SEND_DATA_BUF,lock_AFI_err,13); 
+			//第四位与发送命令对应		
+			if(USART_BUF[3]==0x40)
+				SEND_DATA_BUF[3]=0x40;
+			else
+				if(USART_BUF[3]==0x00)
+				SEND_DATA_BUF[3]=0x00;	
+			 
+			ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+			SEND_DATA_BUF[13]=crc_first;
+			SEND_DATA_BUF[14]=crc_second;
+			SEND_LENGTH=15;
+//			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+			STATE&=0xef;
+	  }	
+	 break;
+ }//if(STATE&0x02)
+
+ 
+ 
+ 
+
+ 
+ //写DSF命令
+  case 0x20:
+		{
+			memcpy(pMask,USART_BUF+11,8);
+			memcpy(&Dsfid,USART_BUF+22,1);
+			if(STATUS_APPLY_15693==0x01)
+			{						
+							for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}
+						 if(status==PH_ERR_SUCCESS)
+						 {		
+							status_2 =	phalI15693_WriteDSFID(
+																								 &al15693,  /**< [In] Pointer to this layers parameter structure. */
+																								 PHAL_I15693_OPTION_ON,     /**< [In] Option flag; \c #PHAL_I15693_OPTION_OFF: disable; \c #PHAL_I15693_OPTION_ON: enable. */
+																								 Afi         /**< [In] Value of Application Family Identifier. */
+																								 );		
+						}
+					if(PH_ERR_SUCCESS != status)
+					{
+							memcpy(SEND_DATA_BUF,write_DSFID_err,13); 				
+							//第四位与发送命令对应		
+							if(USART_BUF[3]==0x40)
+								SEND_DATA_BUF[3]=0x40;
+							else
+								if(USART_BUF[3]==0x00)
+								SEND_DATA_BUF[3]=0x00;					 
+							ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+							SEND_DATA_BUF[13]=crc_first;
+							SEND_DATA_BUF[14]=crc_second;
+							SEND_LENGTH=15;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+							STATE=0x00;
+							#ifdef dbg
+							printf("<<15693写DSFID失败, 激活卡失败   \r\n\r\n");
+							#endif				
+					}
+				 else if(PH_ERR_SUCCESS == status_2)//写入成功
+				  {	
+							memcpy(SEND_DATA_BUF,write_DSFID_suc,11); 				
+							//第四位与发送命令对应		
+							if(USART_BUF[3]==0x40)
+								SEND_DATA_BUF[3]=0x40;
+							else
+								if(USART_BUF[3]==0x00)
+								SEND_DATA_BUF[3]=0x00;	
+							ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+							SEND_DATA_BUF[11]=crc_first;
+							SEND_DATA_BUF[12]=crc_second;
+							SEND_LENGTH=13;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+							STATE=0x00;
+							#ifdef dbg
+							printf("<<15693写DSFID成功       \r\n\r\n");
+							#endif			
+					}
+				else if(PH_ERR_SUCCESS != status_2)//写入失败
+					{
+							memcpy(SEND_DATA_BUF,write_DSFID_err,13); 				
+							//第四位与发送命令对应		
+							if(USART_BUF[3]==0x40)
+								SEND_DATA_BUF[3]=0x40;
+							else
+								if(USART_BUF[3]==0x00)
+								SEND_DATA_BUF[3]=0x00;					 
+							ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+							SEND_DATA_BUF[13]=crc_first;
+							SEND_DATA_BUF[14]=crc_second;
+							SEND_LENGTH=15;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+							STATE=0x00;
+							#ifdef dbg
+							printf("<<15693写DSFID失败      \r\n\r\n");
+							#endif				
+					 }
+				}
+			else
+			{
+					#ifdef dbg
+					printf("<<15693写DSFID失败,配置15693协议失败 \r\n\r\n");
+					#endif	
+					memcpy(SEND_DATA_BUF,write_DSFID_err,13); 
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;			 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE=0x00;
+			}	
+   break;	 
+ } //if(STATE&0x04)
+ 
+ 
+ 
+ 
+//锁DSFID命令
+    case 0x40:
+		{
+//			STATE&=0xbf;
+			memcpy(pMask,USART_BUF+11,8);
+			memcpy(&Dsfid,USART_BUF+22,1);
+			/*配置“应用层”,使用ISO15693的应用	*/
+			if(STATUS_APPLY_15693==0x01)
+			{					
+						for(int g=0;g<3;g++)
+							{
+								//激活卡
+								status = phpalSli15693_ActivateCard(&palSli, 
+																										PHPAL_SLI15693_ACTIVATE_ADDRESSED, 
+																										PHPAL_SLI15693_FLAG_DATA_RATE,
+																										0xFF, 
+																										pMask, 
+																										0,
+																										&bDsfid, 
+																										pUid,
+																										&bMoreCardsAvaliable);						
+//								printf("  phpalSli15693_ActivateCard status=%02x					\r\n",status);
+							 if(status == PH_ERR_SUCCESS)
+								 break;
+							}	
+					 if(status==PH_ERR_SUCCESS)
+					 {		
+							status_2 =	phalI15693_LockDSFID(
+																					 &al15693,  /**< [In] Pointer to this layers parameter structure. */
+																					 PHAL_I15693_OPTION_ON     /**< [In] Option flag; \c #PHAL_I15693_OPTION_OFF: disable; \c #PHAL_I15693_OPTION_ON: enable. */
+																					 );		
+					}
+					
+					 if(PH_ERR_SUCCESS != status)
+						{
+							#ifdef dbg
+							printf("<<15693锁DSFID失败,激活卡失败    \r\n\r\n");
+							#endif	
+							memcpy(SEND_DATA_BUF,lock_DSFID_err,13); 				
+							//第四位与发送命令对应		
+							if(USART_BUF[3]==0x40)
+								SEND_DATA_BUF[3]=0x40;
+							else
+								if(USART_BUF[3]==0x00)
+								SEND_DATA_BUF[3]=0x00;					 
+							ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+							SEND_DATA_BUF[13]=crc_first;
+							SEND_DATA_BUF[14]=crc_second;
+							SEND_LENGTH=15;
+//							HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+							STATE=0x00;				
+					 } 
+				  else if(PH_ERR_SUCCESS != status_2)//写入失败
+				  {
+						memcpy(SEND_DATA_BUF,lock_DSFID_err,13); 						
+						//第四位与发送命令对应		
+						if(USART_BUF[3]==0x40)
+							SEND_DATA_BUF[3]=0x40;
+						else
+							if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;							 
+						ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+						SEND_DATA_BUF[13]=crc_first;
+						SEND_DATA_BUF[14]=crc_second;
+						SEND_LENGTH=15;
+//						HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);
+						STATE=0x00;
+						#ifdef dbg
+						printf("<<15693锁DSFID失败    \r\n\r\n");
+						#endif				
+					}		
+					else if(PH_ERR_SUCCESS == status_2)//写入成功
+					{	
+						memcpy(SEND_DATA_BUF,lock_DSFID_suc,11); 						
+						//第四位与发送命令对应		
+						if(USART_BUF[3]==0x40)
+							SEND_DATA_BUF[3]=0x40;
+						else if(USART_BUF[3]==0x00)
+							SEND_DATA_BUF[3]=0x00;				 
+						ComputeCrc(2,(SEND_DATA_BUF+1),10,&crc_first,&crc_second);
+						SEND_DATA_BUF[11]=crc_first;
+						SEND_DATA_BUF[12]=crc_second;
+						SEND_LENGTH=13;
+//						HAL_UART_Transmit(&huart1,SEND_DATA_BUF,13,500);	
+						STATE=0x00;
+						#ifdef dbg
+						printf("<<15693锁DSFID成功    \r\n\r\n");
+						#endif			
+					}			   
+			 }
+			else
+			 {	
+					#ifdef dbg
+					printf("<<15693锁DSFID失败,配置应用层失败    \r\n\r\n");
+					#endif	
+					memcpy(SEND_DATA_BUF,lock_DSFID_err,13); 				
+					//第四位与发送命令对应		
+					if(USART_BUF[3]==0x40)
+						SEND_DATA_BUF[3]=0x40;
+					else
+						if(USART_BUF[3]==0x00)
+						SEND_DATA_BUF[3]=0x00;					 
+					ComputeCrc(2,(SEND_DATA_BUF+1),12,&crc_first,&crc_second);
+					SEND_DATA_BUF[13]=crc_first;
+					SEND_DATA_BUF[14]=crc_second;
+					SEND_LENGTH=15;
+//					HAL_UART_Transmit(&huart1,SEND_DATA_BUF,15,500);	
+					STATE=0x00;
+			 }		
+	 break;
+ }	//if(STATE&0x08)
+//锁数据块
+		case 0x80:
+		{   
+			lock_block();		
+			STATE=0x00;
+			break;
+		}	//if(STATE&0x10)
+		default:
+			break;
+	}
+}
+
+

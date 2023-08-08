@@ -1,0 +1,110 @@
+#include "main.h"
+#include "include.h"
+#include "usbd_custom_hid_if.h"
+#include "usbd_customhid.h"
+
+extern USBD_HandleTypeDef hUsbDeviceFS;
+//unsigned char rx_data[100];
+/*
+功能  ：
+      main函数
+形参  ：
+      无
+返回值：
+			无
+*/
+int main(void)
+{
+	unsigned int rx_length=0;
+	unsigned char len=0;
+	unsigned char state1=0;
+	unsigned char state2=0;
+  sys_init();
+	uart_init();
+	USB_DEVICE_Init();
+	GPIO_Init();
+	bsp_task_common();
+//	iwdg_init();
+	
+	printf("程序重启  \r\n");
+	while(1)
+	{			
+//		refresh_iwdg();	
+    /*串口接收  */		
+    state1=uart_Rx_Data(USART_BUF,&rx_length);
+		/*  USB 接收   */
+		state2=USB_Receive_Data(100,USB_BUF);	
+		if(state1==0)  //串口处理函数
+		{
+/*			printf("state1 = %02x  \r\n",state1);
+			printf("rx_length = %02x \r\n",rx_length);		
+			for(int i=0;i<rx_length;i++)
+				printf(" %02x  ",USART_BUF[i]);
+			printf("\r\n");
+*/
+			
+			Rx_Data_Analysis(USART_BUF,(rx_length-1));
+			if(STATE)
+				Iso_15693_Single();
+			else if(STATE2)
+				Iso_14443a_Single();
+			else if(MANY_STATE)
+				Many_Car();			
+		
+			if(SEND_LENGTH !=0 )
+			HAL_UART_Transmit(&huart1,SEND_DATA_BUF,SEND_LENGTH,500);	
+			SEND_LENGTH=0;
+		}
+		else
+		if(state2==0)  //usb 处理函数
+		{
+			  SEND_LENGTH=0;
+				/*USB 数据处理*/
+				rx_length=USB_BUF[0];
+				memcpy(SEND_DATA_BUF,USB_BUF+1,rx_length);
+				memcpy(USART_BUF,SEND_DATA_BUF,rx_length);
+			  Rx_Data_Analysis(USART_BUF,rx_length-1);	
+
+				if(STATE)
+					Iso_15693_Single();
+				else if(STATE2)
+					Iso_14443a_Single();
+				else if(MANY_STATE)
+					Many_Car();			
+			
+			if(SEND_LENGTH !=0 )
+			{
+				len=0;			
+				/* USB 发送  */
+				 while(1)
+				 {
+					//每包数据大小固定为64B，不足64B需要补齐到64B
+					if(SEND_LENGTH>=63)
+					{
+						USART_BUF[0]=63;
+						memcpy(USART_BUF+1,SEND_DATA_BUF+len,63);												
+						USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS,CUSTOM_HID_DEFINE_EPIN_ADDR, &USART_BUF[0],64);
+						len+=63;
+						SEND_LENGTH-=63;
+						HAL_Delay(3);					
+					}
+					else
+						if(SEND_LENGTH > 0) 
+					{
+						USART_BUF[0]=SEND_LENGTH;
+						memcpy(USART_BUF+1,SEND_DATA_BUF+len,SEND_LENGTH);
+						USBD_CUSTOM_HID_SendReport(&hUsbDeviceFS,CUSTOM_HID_DEFINE_EPIN_ADDR, &USART_BUF[0],SEND_LENGTH+1);
+						HAL_Delay(3);
+						break;
+					}
+					else 
+						if(SEND_LENGTH<=0)
+							break;
+				}
+				
+			}			
+			}
+	 }
+	}
+//			rx_length=USBD_LL_GetRxDataSize(&hUsbDeviceFS,CUSTOM_HID_DEFINE_EPOUT_ADDR);
+	

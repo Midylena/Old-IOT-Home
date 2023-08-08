@@ -1,0 +1,427 @@
+#include "bsp_task3.h"
+#include "include.h"
+
+
+unsigned char MANY_STATE=0;
+unsigned char MANY_ONLY_STATE=0;
+
+
+void Rx_Data_Analysis(unsigned char *data,unsigned int length)
+{	
+			#ifdef  dbg_task
+			printf("In task 3 \r\n");
+			#endif
+			HAL_GPIO_TogglePin(GPIOC,GPIO_PIN_8); //反转LED灯
+//			memcpy(USART_BUF,data,length);	  //存储接收的数据		
+			switch (length)  //以接收的长度判断命令
+				{
+				case 0x05:
+					if(!memcmp(data,rev_uart_open0,5))
+					{
+					#ifdef dbg
+								printf(">>打开标志0 \r\n");
+				    #endif
+						SEND_LENGTH=6;
+						memcpy(SEND_DATA_BUF,send_uart_open0,SEND_LENGTH);						
+//						HAL_UART_Transmit(&huart1,send_uart_open0,6,500)					
+					#ifdef dbg
+								printf("<<打开标志0 返回 \r\n");
+				    #endif	
+					}				
+				break;
+				
+				case 0x06:
+					if(!memcmp(data,rev_uart_search2,6))
+					{
+						#ifdef dbg
+									printf(">>搜索标志2 \r\n");
+						#endif		
+						SEND_LENGTH=18;
+						memcpy(SEND_DATA_BUF,send_uart_search2,SEND_LENGTH);
+//					    HAL_UART_Transmit(&huart1,send_uart_search2,18,500);	
+						#ifdef dbg
+									printf("<<搜索标志2 返回 \r\n");
+						#endif
+					}
+					break;
+					
+				case 0x07:	
+				  if(!memcmp(data,rev_uart_search1,7))
+					{
+						#ifdef dbg
+									printf(">>搜索标志1 \r\n");
+						#endif	
+						SEND_LENGTH=8;
+						memcpy(SEND_DATA_BUF,send_uart_search1,SEND_LENGTH);
+//				        HAL_UART_Transmit(&huart1,send_uart_search1,8,500);							
+						#ifdef dbg
+									printf("<<搜索标志1 返回 \r\n");
+						#endif	
+					}
+					
+					if(!memcmp(data,rec_one_type_14443a_disconnect,3))
+					 {
+						if(!memcmp(data+4,rec_one_type_14443a_disconnect+4,2))
+						{
+						#ifdef dbg
+									printf(">>14443a单标签断开连接命令 \r\n");
+						#endif	
+//							SEND_LENGTH=9;
+//							memcpy(SEND_DATA_BUF,send_one_type_14443a_disconnect_one,SEND_LENGTH);
+//							if(data[3]==0x40)  //与发送同步
+//							{
+//								SEND_DATA_BUF[3]=0x40;
+////							    HAL_UART_Transmit(&huart1,send_one_type_14443a_disconnect_two,9,500);
+//							}
+
+							
+							if(data[3]==0x40)  //与发送同步
+							{
+								SEND_LENGTH=9;
+								memcpy(SEND_DATA_BUF,send_one_type_14443a_disconnect_two,SEND_LENGTH);
+//							    HAL_UART_Transmit(&huart1,send_one_type_14443a_disconnect_two,9,500);
+							}
+					  	    else
+							if(data[3]==0x00)
+							{
+								SEND_LENGTH=9;
+								memcpy(SEND_DATA_BUF,send_one_type_14443a_disconnect_one,SEND_LENGTH);
+//								HAL_UART_Transmit(&huart1,send_one_type_14443a_disconnect_one,9,500);
+							}
+						#ifdef dbg
+									printf("<<14443a单标签断开连接 \r\n\r\n");					
+						#endif												
+					    }
+					 }
+					
+					//USB搜索时返回的数据 
+					 if(!memcmp(data,usb_out_search,7))
+					 {
+							SEND_LENGTH=18;
+							memcpy(SEND_DATA_BUF,usb_in_search,SEND_LENGTH);					 
+					 }
+					  
+					
+				break;
+					 
+				case 0x08:
+				  if(!memcmp(data,rev_uart_open1,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志1命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open1,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open1,24,500);
+						#ifdef dbg
+									printf("<<打开标志1 返回\r\n\r\n");					
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open2,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志2命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open2,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open2,24,500);
+						#ifdef dbg
+									printf("<<打开标志2 返回\r\n\r\n");
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open3,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志3命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open3,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open3,24,500);
+						#ifdef dbg
+									printf("<<打开标志3 返回\r\n\r\n");
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open4,8))
+					{
+				  	    #ifdef dbg
+									printf(">>打开标志4命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open4,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open4,24,500);
+						#ifdef dbg
+									printf("<<打开标志4 返回\r\n\r\n");
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open5,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志5命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open5,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open5,24,500);
+						#ifdef dbg
+									printf("<<打开标志5 返回\r\n\r\n");
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open6,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志6命令 \r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open6,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open6,24,500);
+						#ifdef dbg
+									printf("<<打开标志6 返回\r\n\r\n");
+						#endif		
+					}
+					else
+					  if(!memcmp(data,rev_uart_open7,8))
+					{
+						#ifdef dbg
+									printf(">>打开标志7命令\r\n");
+						#endif	
+						SEND_LENGTH=24;
+						memcpy(SEND_DATA_BUF,send_uart_open7,SEND_LENGTH);
+//				  HAL_UART_Transmit(&huart1,send_uart_open7,24,500);
+						#ifdef dbg
+									printf("<<打开标志7 返回\r\n\r\n");
+						#endif		
+					}
+					
+					
+				break;
+				
+				case 0x0B: //14443a检测
+//					if((!memcmp(data,one_type_iso14443a_mifara_search_command_one,3))&&(!memcmp(data+4,one_type_iso14443a_mifara_search_command_one+4,8)))
+//					{
+//					  STATE2=0x01;//读14443aUID					
+//						#ifdef dbg
+//									printf(">>IOS14443A 单标签读UID命令\r\n");
+//					   #endif		
+//					}
+
+				
+				
+				
+					if(!memcmp(data,one_type_iso14443a_mifara_search_command_one,11))
+					{
+					  STATE2=0x01;//读14443aUID					
+						#ifdef dbg
+									printf(">>IOS14443A 单标签读UID命令\r\n");
+					  #endif		
+					}
+					else
+				  	if(!memcmp(data,one_type_iso14443a_mifara_search_command_two,11))
+					{
+					  STATE2=0x01; //读14443aUID
+					  #ifdef dbg
+									printf(">>IOS14443A 单标签读UID命令\r\n");
+						#endif		
+					}
+				break;
+				
+				case 0x0C:
+
+				break;
+				
+				case 0x0D:  //15693检测
+//					if((!memcmp(data,one_type_iso15693_search_command_one,3))&&(!memcmp(data+4,one_type_iso15693_search_command_one+4,10))) 
+//					{
+//					  STATE=0x01; //读15693UID
+//						#ifdef dbg
+//									printf(">>IOS15693 单标签读UID命令 \r\n");
+//						#endif			
+//					}
+
+				
+				 if(!memcmp(data,one_type_iso15693_search_command_one,13)) 
+					{
+					  STATE=0x01; //读15693UID
+						#ifdef dbg
+									printf(">>IOS15693 单标签读UID命令 \r\n");
+						#endif			
+					}
+					else
+				  	if(!memcmp(data,one_type_iso15693_search_command_two,13))
+					{
+            STATE=0x01; //读15693UID
+						#ifdef dbg
+									printf(">>IOS15693 单标签读UID命令  \r\n");
+						#endif		
+					}
+										
+					if(!memcmp(data,rev_one_type_14443a_read,3))
+						if(!memcmp(data+4,rev_one_type_14443a_read+4,5))
+						{
+						STATE2=0x08;						
+						#ifdef dbg
+									printf(">>14443a  单标签读数据块命令 \r\n");
+						#endif	
+						}
+
+				break;
+					
+					
+				case 0x0e:									
+					if(!memcmp(data+4,rev_one_type_14443a_connect_order,5)) 
+					{
+						 STATE2=0x02; //14443a连接标志
+							#ifdef dbg
+										printf(">>14443a 单标签连接命令  \r\n");
+							#endif	
+					}
+			
+				 break;
+		  	case 0x11:
+
+				break;
+				case 0x13:
+		
+					if(!memcmp(data+4,rev_one_type_14443a_auth,5)) 
+						{
+							 STATE2=0x04; //14443a认证标志
+							#ifdef dbg
+										printf(">>14443a 单标签认证命令   \r\n");
+							#endif				
+						}
+					
+						break;
+						
+				
+			 case 0x14:
+					
+					break;
+			 case 0x16:
+				if((!memcmp(data,rev_many_type_UID,3))&&(!memcmp(data+4,rev_many_type_UID+4,1))) 
+					{
+						if(!memcmp(data+6,rev_many_type_UID+6,15))
+						{
+						  if(data[5]==0x0a)
+							{
+									#ifdef dbg
+												printf(">>多标签读取UID命令 1 \r\n");
+									#endif		
+									MANY_STATE=0x01;
+							}
+							else
+								if(data[5]==0x02)
+							{								
+									#ifdef dbg
+												printf(">>多标签读取UID命令 2\r\n");
+									#endif		
+									MANY_STATE=0x01;
+							}
+						}			
+					}
+					
+			  	break;
+				
+			case 0x17:
+					if((!memcmp(data,rev_one_type_15693_lock_AFI1_DSFID,11))||(!memcmp(data,rev_one_type_15693_lock_AFI2_DSFID,11)) )
+						{
+							if(!memcmp(data+19,rev_one_type_15693_lock_AFI,3))
+								{
+										STATE=0x10;					
+										#ifdef dbg
+													printf(">>IOS15693 单标签锁AFI命令 \r\n");
+										#endif
+								}
+							else 
+								if(!memcmp(data+19,rev_one_type_15693_lock_DSFID,3))
+								{
+										STATE=0x40;					
+										#ifdef dbg
+													printf(">>IOS15693 单标签锁DSFID命令 \r\n");
+										#endif
+							  }
+						}
+									
+			  	break;
+			 case 0x018:
+					if((!memcmp(data,rev_one_type_15693_write_AFI1_DSFID,11))||(!memcmp(data,rev_one_type_15693_write_AFI2_DSFID,11)) )
+					{
+						if(!memcmp(data+19,rev_one_type_15693_write_AFI,3))
+						{
+								STATE=0x08;					
+								#ifdef dbg
+											printf(">>IOS15693 单标签写AFI命令 \r\n");
+								#endif	
+						}
+						else if(!memcmp(data+19,rev_one_type_15693_write_DSFID,3))
+						{
+								STATE=0x20;					
+								#ifdef dbg
+											printf(">>IOS15693 单标签写DSFID命令 \r\n");
+								#endif									
+						}
+					}	
+				  break;
+					
+				case 0x1b:
+					if((!memcmp(data,rev_one_type_15693_lock_data_block1,11))||(!memcmp(data,rev_one_type_15693_lock_data_block2,11)) )
+						{
+							if(!memcmp(data+19,rev_one_type_15693_lock_block,3))
+							{
+									STATE=0x80;					
+									#ifdef dbg
+												printf(">>IOS15693 单标签锁数据块命令 \r\n");
+									#endif	
+							}
+					  }
+					break;
+					
+					
+				
+				case 0x1c://15693写数据
+				 if(!memcmp(data+4,rev_one_type_15693_read_one,7)) 
+					{
+						 if(!memcmp(data+20,rev_one_type_15693_read_one+7,2)) 
+							{
+								STATE=0x02;      // 15693读数据标志
+								#ifdef dbg
+											printf(">>IOS15693 单标签读数据命令 \r\n");
+								#endif		
+							}
+					}
+
+				break;
+					
+					
+				case 0x1d:
+				 if(!memcmp(data,rev_one_type_14443a_write,3)) 
+					{
+						 if(!memcmp(data+4,rev_one_type_14443a_write+4,5)) 
+							{
+								STATE2=0x10;      // 14443a写数据标志
+								#ifdef dbg
+											printf(">>14443a 单标签写数据命令 \r\n");
+								#endif		
+							}
+					}
+					
+				
+				
+					break;
+				default:
+
+				 if(!memcmp(data+4,rev_one_type_15693_write_one,7)) 
+					{
+						 if(!memcmp(data+20,rev_one_type_15693_write_one+7,2)) 
+							{
+								STATE=0x04;      // 15693写数据标志
+								#ifdef dbg
+											printf(">>IOS15693 单标签写数据命令 \r\n");
+								#endif		
+							}
+					}			
+					break;
+			}  //end witch();			
+}  //end task
